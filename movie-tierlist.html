@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영화 티어리스트</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .search-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .search-section h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-box button {
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .search-box button:hover {
+            background: #764ba2;
+        }
+
+        .search-results {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .movie-card {
+            position: relative;
+            cursor: grab;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s;
+            draggable: true;
+        }
+
+        .movie-card:hover {
+            transform: scale(1.05);
+        }
+
+        .movie-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .movie-card-title {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px;
+            font-size: 12px;
+            max-height: 50px;
+            overflow: hidden;
+        }
+
+        .tierlist-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tierlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .tierlist-header h2 {
+            font-size: 18px;
+            color: #333;
+        }
+
+        .tierlist-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .tierlist-controls button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .tierlist-controls button:hover {
+            background: #764ba2;
+        }
+
+        .tierlist {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .tier {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .tier-label {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            border-radius: 8px;
+        }
+
+        .tier-label.s { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); }
+        .tier-label.a { background: linear-gradient(135deg, #ffa94d 0%, #fd7e14 100%); }
+        .tier-label.b { background: linear-gradient(135deg, #74c0fc 0%, #4c6ef5 100%); }
+        .tier-label.c { background: linear-gradient(135deg, #b197fc 0%, #9775fa 100%); }
+
+        .tier-zone {
+            background: #f5f5f5;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 100px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 10px;
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        .tier-zone.drag-over {
+            background: #e8e8ff;
+            border-color: #667eea;
+        }
+
+        .tier-poster {
+            position: relative;
+            width: 80px;
+            height: 100px;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            cursor: grab;
+            draggable: true;
+        }
+
+        .tier-poster img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .tier-poster-delete {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 24px;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .tier-poster-delete:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .nickname-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .nickname-section h3 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .nickname-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .nickname-input-group input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .nickname-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .nickname-input-group button {
+            padding: 10px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .nickname-input-group button:hover {
+            background: #764ba2;
+        }
+
+        .share-section {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .share-section input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            background: #fff;
+            word-break: break-all;
+        }
+
+        .share-section button {
+            padding: 10px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .share-section button:hover {
+            background: #218838;
+        }
+
+        .nickname-display {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .nickname-display strong {
+            color: #333;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #c3e6cb;
+        }
+
+        @media (max-width: 1024px) {
+            .main {
+                grid-template-columns: 1fr;
+            }
+
+            .search-results {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .search-results {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 영화 티어리스트</h1>
+            <p>당신의 영화 취향을 티어별로 정렬하고 친구와 공유하세요</p>
+        </div>
+
+        <div class="main">
+            <div class="search-section">
+                <h2>🔍 영화 검색</h2>
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="영화 제목을 입력하세요"
+                        onkeypress="if(event.key==='Enter') searchMovies()"
+                    >
+                    <button onclick="searchMovies()">검색</button>
+                </div>
+                <div id="searchMessage"></div>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+
+            <div class="tierlist-section">
+                <div class="tierlist-header">
+                    <h2>📊 나의 티어리스트</h2>
+                    <div class="tierlist-controls">
+                        <button onclick="resetTierlist()">초기화</button>
+                        <button onclick="changeApiKey()">API 키 변경</button>
+                    </div>
+                </div>
+
+                <div class="tierlist" id="tierlist">
+                    <div class="tier">
+                        <div class="tier-label s">S</div>
+                        <div class="tier-zone" data-tier="s" ondrop="dropMovie(event)" ondragover="dragOver(event)" ondragleave="dragLeave(event)"></div>
+                    </div>
+
+                    <div class="tier">
+                        <div class="tier-label a">A</div>
+                        <div class="tier-zone" data-tier="a" ondrop="dropMovie(event)" ondragover="dragOver(event)" ondragleave="dragLeave(event)"></div>
+                    </div>
+
+                    <div class="tier">
+                        <div class="tier-label b">B</div>
+                        <div class="tier-zone" data-tier="b" ondrop="dropMovie(event)" ondragover="dragOver(event)" ondragleave="dragLeave(event)"></div>
+                    </div>
+
+                    <div class="tier">
+                        <div class="tier-label c">C</div>
+                        <div class="tier-zone" data-tier="c" ondrop="dropMovie(event)" ondragover="dragOver(event)" ondragleave="dragLeave(event)"></div>
+                    </div>
+                </div>
+
+                <div class="nickname-section">
+                    <h3>👤 닉네임 설정</h3>
+                    <div class="nickname-input-group">
+                        <input 
+                            type="text" 
+                            id="nicknameInput" 
+                            placeholder="닉네임을 입력하세요"
+                            maxlength="20"
+                        >
+                        <button onclick="setNickname()">저장</button>
+                    </div>
+                    <div class="nickname-display" id="nicknameDisplay"></div>
+
+                    <h3 style="margin-top: 20px;">🔗 공유 링크</h3>
+                    <div class="share-section">
+                        <input type="text" id="shareLink" readonly>
+                        <button onclick="copyShareLink()">복사</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = localStorage.getItem('tmdb_api_key') || ''; // TMDB 키는 코드에 넣지 말고 입력해서 사용
+        const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+        let tierData = {
+            s: [],
+            a: [],
+            b: [],
+            c: []
+        };
+        let nickname = '';
+
+        // 초기화
+        function init() {
+            loadFromLocalStorage();
+            displayNickname();
+            generateShareLink();
+        }
+
+        // 영화 검색
+        async function searchMovies() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                document.getElementById('searchMessage').innerHTML = '<div class="error">검색어를 입력하세요</div>';
+                return;
+            }
+
+            document.getElementById('searchMessage').innerHTML = '<div style="text-align
