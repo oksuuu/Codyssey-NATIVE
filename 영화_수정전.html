@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>영화 티어리스트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f6f9;
+    --surface: #ffffff;
+    --line: #e3e7ee;
+    --ink: #1a1c22;
+    --muted: #7a7f8a;
+    --accent: #2f5bea;
+    --danger: #c0392b;
+    --S: #ffb4b0;
+    --A: #ffd0a1;
+    --B: #ffe79a;
+    --C: #cfeca2;
+    --D: #aedcf4;
+    --F: #d3cbf5;
+    --card-w: 68px;
+    --panel-h: 214px;
+    --font: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-text-size-adjust: 100%;
+    padding-bottom: calc(var(--panel-h) + env(safe-area-inset-bottom, 0px) + 16px);
+    overflow-x: hidden;
+  }
+  body.dragging { cursor: grabbing; }
+
+  header {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 16px 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .status { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .status.warn { color: var(--danger); }
+
+  main { max-width: 720px; margin: 0 auto; padding: 0 12px; }
+
+  .board {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .tier { display: flex; min-height: 124px; border-top: 1px solid var(--line); }
+  .tier:first-child { border-top: none; }
+
+  /* 티어 라벨: 표 끝을 뜯어낸 듯한 반원 홈 */
+  .tier-label {
+    flex: 0 0 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+    color: rgba(26, 28, 34, 0.82);
+    position: relative;
+    -webkit-mask: radial-gradient(circle 7px at 100% 50%, transparent 6.5px, #000 7px);
+            mask: radial-gradient(circle 7px at 100% 50%, transparent 6.5px, #000 7px);
+  }
+  .tier-drop {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 8px;
+    padding: 10px;
+    transition: background-color .12s;
+  }
+  .tier-drop.over { background: #eef2fd; }
+
+  .hint { margin: 12px 4px 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+
+  .card {
+    position: relative;
+    width: var(--card-w);
+    flex: 0 0 auto;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    cursor: grab;
+  }
+  .poster {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: 6px;
+    background: #e9ecf2;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .poster img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .title {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.3;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .year { color: var(--muted); }
+  .card.lifting { opacity: .3; }
+  .card.done { cursor: default; }
+  .card.done .poster { opacity: .35; }
+  .card.done .badge {
+    position: absolute; left: 50%; top: 38%;
+    transform: translate(-50%, -50%);
+    font-size: 10px; font-weight: 700;
+    background: var(--ink); color: #fff;
+    padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+  }
+
+  .placeholder {
+    width: var(--card-w);
+    aspect-ratio: 2 / 3;
+    flex: 0 0 auto;
+    border: 2px dashed var(--accent);
+    border-radius: 6px;
+    background: rgba(47, 91, 234, .06);
+  }
+  .ghost {
+    position: fixed; left: 0; top: 0; z-index: 100;
+    pointer-events: none;
+    will-change: transform;
+  }
+  .ghost .poster { box-shadow: 0 12px 28px rgba(26, 28, 34, .22); }
+
+  /* 하단 검색 패널 */
+  .panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    height: calc(var(--panel-h) + env(safe-area-inset-bottom, 0px));
+    padding: 12px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, .97);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+  }
+  .panel-inner { max-width: 720px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+  .search { display: flex; gap: 8px; }
+  .search input {
+    flex: 1; min-width: 0;
+    font: inherit; font-size: 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f8f9fb;
+    color: var(--ink);
+  }
+  .search input:focus { outline: none; border-color: var(--accent); background: #fff; }
+  .search button {
+    font: inherit; font-size: 15px; font-weight: 500;
+    padding: 0 18px;
+    border: none; border-radius: 10px;
+    background: var(--accent); color: #fff;
+    cursor: pointer;
+  }
+  .search button:focus-visible, .search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .results {
+    flex: 1;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    align-items: flex-start;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .results .msg { margin: auto; padding: 0 12px; font-size: 13px; line-height: 1.5; color: var(--muted); text-align: center; }
+
+  .remove-zone {
+    position: absolute; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: #fff3f2;
+    border-top: 2px dashed #eba29b;
+    color: var(--danger);
+    font-size: 14px; font-weight: 500;
+  }
+  .panel.removing .remove-zone { display: flex; }
+  .panel.removing.over .remove-zone { background: #ffe0dd; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tier-drop { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>영화 티어리스트</h1>
+    <span class="status" id="status"></span>
+  </header>
+
+  <main>
+    <div class="board" id="board"></div>
+    <p class="hint">포스터를 길게 눌러 원하는 티어로 끌어다 놓으세요. 티어에서 빼려면 아래 검색 영역으로 끌어오면 돼요.</p>
+  </main>
+
+  <section class="panel" id="panel">
+    <div class="panel-inner">
+      <div class="search">
+        <input id="q" type="search" placeholder="영화 제목 검색" enterkeyhint="search" autocomplete="off">
+        <button id="go" type="button">검색</button>
+      </div>
+      <div class="results" id="results"></div>
+    </div>
+    <div class="remove-zone">여기에 놓으면 티어에서 빠져요</div>
+  </section>
+
+<script>
+  // ▼ 여기에 TMDB API 키(v3 API 키 또는 v4 읽기 액세스 토큰)를 넣으세요
+  const TMDB_KEY = "e0cf8a1482bcadf0c0404b2b273aee49";
+
+  const TIERS = ["S", "A", "B", "C", "D", "F"];
+  const STORE_KEY = "movie-tierlist-v1";
+  const IMG = "https://image.tmdb.org/t/p/w185";
+  const LONG_PRESS_MS = 220;
+
+  const boardEl = document.getElementById("board");
+  const resultsEl = document.getElementById("results");
+  const statusEl = document.getElementById("status");
+  const panelEl = document.getElementById("panel");
+  const qEl = document.getElementById("q");
+
+  let state = { S: [], A: [], B: [], C: [], D: [], F: [] };
+  let results = [];
+  let resultsMsg = "영화 제목을 검색해 보세요.";
+  let storageOK = true;
+  let searchSeq = 0;
+
+  /* ---------- 저장 ---------- */
+  function setStatus(text, warn) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle("warn", !!warn);
+  }
+  function load() {
+    try {
+      localStorage.setItem("__t", "1");
+      localStorage.removeItem("__t");
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        TIERS.forEach(t => { if (Array.isArray(data[t])) state[t] = data[t]; });
+      }
+      setStatus("자동 저장 중");
+    } catch (e) {
+      storageOK = false;
+      setStatus("이 브라우저에서는 저장이 안 돼요", true);
+    }
+  }
+  function save() {
+    if (!storageOK) return;
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      setStatus("저장됨");
+    } catch (e) {
+      storageOK = false;
+      setStatus("저장에 실패했어요", true);
+    }
+  }
+  function placedIds() {
+    const s = new Set();
+    TIERS.forEach(t => state[t].forEach(m => s.add(m.id)));
+    return s;
+  }
+
+  /* ---------- 그리기 ---------- */
+  function makeCard(movie, fromTier, done) {
+    const card = document.createElement("div");
+    card.className = "card" + (done ? " done" : "");
+    card.dataset.id = movie.id;
+
+    const poster = document.createElement("div");
+    poster.className = "poster";
+    if (movie.poster) {
+      const img = document.createElement("img");
+      img.src = IMG + movie.poster;
+      img.alt = "";
+      img.loading = "lazy";
+      img.draggable = false;
+      poster.appendChild(img);
+    } else {
+      poster.textContent = "포스터 없음";
+    }
+    card.appendChild(poster);
+
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = movie.title;
+    if (!fromTier && movie.year) {
+      const y = document.createElement("span");
+      y.className = "year";
+      y.textContent = " (" + movie.year + ")";
+      title.appendChild(y);
+    }
+    card.appendChild(title);
+
+    if (done) {
+      const b = document.createElement("span");
+      b.className = "badge";
+      b.textContent = "배치됨";
+      card.appendChild(b);
+    } else {
+      attachDrag(card, movie, fromTier);
+    }
+    card.addEventListener("contextmenu", e => e.preventDefault());
+    return card;
+  }
+
+  function renderBoard() {
+    boardEl.textContent = "";
+    TIERS.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "tier";
+      const label = document.createElement("div");
+      label.className = "tier-label";
+      label.style.background = "var(--" + t + ")";
+      label.textContent = t;
+      const drop = document.createElement("div");
+      drop.className = "tier-drop";
+      drop.dataset.tier = t;
+      state[t].forEach(m => drop.appendChild(makeCard(m, t, false)));
+      row.append(label, drop);
+      boardEl.appendChild(row);
+    });
+  }
+
+  function renderResults() {
+    resultsEl.textContent = "";
+    if (!results.length) {
+      const p = document.createElement("p");
+      p.className = "msg";
+      p.textContent = resultsMsg;
+      resultsEl.appendChild(p);
+      return;
+    }
+    const placed = placedIds();
+    results.forEach(m => resultsEl.appendChild(makeCard(m, null, placed.has(m.id))));
+  }
+
+  function render() { renderBoard(); renderResults(); }
+
+  /* ---------- 검색 (TMDB) ---------- */
+  async function search() {
+    const q = qEl.value.trim();
+    if (!q) return;
+    qEl.blur();
+    const seq = ++searchSeq;
+    results = [];
+    if (!TMDB_KEY || TMDB_KEY.startsWith("여기에")) {
+      resultsMsg = "파일 안의 TMDB_KEY 자리에 API 키를 넣어야 검색할 수 있어요.";
+      renderResults();
+      return;
+    }
+    resultsMsg = "검색 중…";
+    renderResults();
+
+    const isToken = TMDB_KEY.length > 60;
+    const url = new URL("https://api.themoviedb.org/3/search/movie");
+    url.searchParams.set("query", q);
+    url.searchParams.set("language", "ko-KR");
+    url.searchParams.set("include_adult", "false");
+    if (!isToken) url.searchParams.set("api_key", TMDB_KEY);
+    const opts = isToken ? { headers: { Authorization: "Bearer " + TMDB_KEY, accept: "application/json" } } : {};
+
+    try {
+      const res = await fetch(url, opts);
+      if (seq !== searchSeq) return;
+      if (res.status === 401) {
+        resultsMsg = "API 키가 맞지 않아요. 파일 안의 TMDB_KEY를 확인해 주세요.";
+      } else if (!res.ok) {
+        resultsMsg = "TMDB 응답 오류(" + res.status + ")로 검색하지 못했어요. 잠시 뒤 다시 검색해 주세요.";
+      } else {
+        const data = await res.json();
+        if (seq !== searchSeq) return;
+        results = (data.results || []).map(m => ({
+          id: m.id,
+          title: m.title || m.original_title || "제목 없음",
+          poster: m.poster_path || "",
+          year: (m.release_date || "").slice(0, 4)
+        }));
+        resultsMsg = "‘" + q + "’ 검색 결과가 없어요. 다른 제목으로 검색해 보세요.";
+      }
+    } catch (e) {
+      if (seq !== searchSeq) return;
+      resultsMsg = "검색하지 못했어요. 인터넷 연결을 확인해 주세요.";
+    }
+    renderResults();
+  }
+  document.getElementById("go").addEventListener("click", search);
+  qEl.addEventListener("keydown", e => { if (e.key === "Enter") search(); });
+
+  /* ---------- 드래그 (터치 길게 누르기 + 마우스) ---------- */
+  let pending = null;   // 누르고 있지만 아직 드래그 전
+  let drag = null;      // 드래그 중
+  let placeholder = null;
+  let rafId = 0;
+
+  function attachDrag(card, movie, fromTier) {
+    card.addEventListener("touchstart", e => {
+      if (e.touches.length > 1 || drag) return;
+      const t = e.touches[0];
+      pending = { card, movie, fromTier, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY };
+      pending.timer = setTimeout(() => {
+        if (!pending) return;
+        const p = pending;
+        pending = null;
+        if (navigator.vibrate) navigator.vibrate(10);
+        beginDrag(p);
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+
+    card.addEventListener("mousedown", e => {
+      if (e.button !== 0 || drag) return;
+      e.preventDefault();
+      pending = { card, movie, fromTier, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, mouse: true };
+    });
+  }
+
+  function cancelPending() {
+    if (pending && pending.timer) clearTimeout(pending.timer);
+    pending = null;
+  }
+
+  document.addEventListener("touchmove", e => {
+    const t = e.touches[0];
+    if (drag) {
+      e.preventDefault();
+      moveDrag(t.clientX, t.clientY);
+    } else if (pending) {
+      pending.x = t.clientX; pending.y = t.clientY;
+      if (Math.hypot(t.clientX - pending.x0, t.clientY - pending.y0) > 10) cancelPending();
+    }
+  }, { passive: false });
+  document.addEventListener("touchend", () => { cancelPending(); if (drag) endDrag(false); });
+  document.addEventListener("touchcancel", () => { cancelPending(); if (drag) endDrag(true); });
+
+  document.addEventListener("mousemove", e => {
+    if (drag) { moveDrag(e.clientX, e.clientY); return; }
+    if (pending && pending.mouse && Math.hypot(e.clientX - pending.x0, e.clientY - pending.y0) > 5) {
+      const p = pending;
+      pending = null;
+      p.x = e.clientX; p.y = e.clientY;
+      beginDrag(p);
+    }
+  });
+  document.addEventListener("mouseup", () => { pending = null; if (drag) endDrag(false); });
+
+  function beginDrag(p) {
+    const rect = p.card.getBoundingClientRect();
+    const ghost = p.card.cloneNode(true);
+    ghost.classList.add("ghost");
+    ghost.style.width = rect.width + "px";
+    document.body.appendChild(ghost);
+
+    placeholder = document.createElement("div");
+    placeholder.className = "placeholder";
+
+    drag = { ...p, ghost, w: rect.width, h: rect.height, target: null };
+    if (p.fromTier) p.card.style.display = "none";
+    else p.card.classList.add("lifting");
+    if (p.fromTier) panelEl.classList.add("removing");
+    document.body.classList.add("dragging");
+    moveDrag(p.x, p.y);
+    rafId = requestAnimationFrame(autoScroll);
+  }
+
+  function moveDrag(x, y) {
+    drag.x = x; drag.y = y;
+    drag.ghost.style.transform = "translate(" + (x - drag.w / 2) + "px," + (y - drag.h * 0.55) + "px) scale(1.06)";
+
+    const el = document.elementFromPoint(x, y);
+    const drop = el && el.closest(".tier-drop");
+    const overPanel = el && el.closest(".panel");
+
+    document.querySelectorAll(".tier-drop.over").forEach(d => { if (d !== drop) d.classList.remove("over"); });
+    panelEl.classList.toggle("over", !!(overPanel && drag.fromTier));
+
+    if (drop) {
+      drop.classList.add("over");
+      placePlaceholder(drop, x, y);
+      drag.target = { tier: drop.dataset.tier };
+    } else {
+      if (placeholder.parentNode) placeholder.remove();
+      drag.target = (overPanel && drag.fromTier) ? { remove: true } : null;
+    }
+  }
+
+  function placePlaceholder(drop, x, y) {
+    const cards = [...drop.querySelectorAll(".card")].filter(c => c.style.display !== "none");
+    let before = null;
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      if (y < r.top || (y <= r.bottom && x < r.left + r.width / 2)) { before = c; break; }
+    }
+    if (before) {
+      if (placeholder.nextSibling !== before || placeholder.parentNode !== drop) drop.insertBefore(placeholder, before);
+    } else if (placeholder.parentNode !== drop || placeholder.nextSibling) {
+      drop.appendChild(placeholder);
+    }
+  }
+
+  function autoScroll() {
+    if (!drag) return;
+    const edge = 70;
+    const panelTop = panelEl.getBoundingClientRect().top;
+    let dy = 0;
+    if (drag.y < edge) dy = -Math.ceil((edge - drag.y) / 6);
+    else if (drag.y > panelTop - edge && drag.y < panelTop) dy = Math.ceil((drag.y - (panelTop - edge)) / 6);
+    if (dy) {
+      window.scrollBy(0, dy);
+      moveDrag(drag.x, drag.y);
+    }
+    rafId = requestAnimationFrame(autoScroll);
+  }
+
+  function endDrag(cancelled) {
+    cancelAnimationFrame(rafId);
+    const d = drag;
+    drag = null;
+
+    let index = -1;
+    if (!cancelled && d.target && d.target.tier && placeholder.parentNode) {
+      index = [...placeholder.parentNode.children].filter(c => c === placeholder || (c.classList.contains("card") && c.style.display !== "none")).indexOf(placeholder);
+    }
+
+    d.ghost.remove();
+    if (placeholder.parentNode) placeholder.remove();
+    document.querySelectorAll(".tier-drop.over").forEach(el => el.classList.remove("over"));
+    panelEl.classList.remove("removing", "over");
+    document.body.classList.remove("dragging");
+
+    if (!cancelled && d.target) {
+      const movie = { id: d.movie.id, title: d.movie.title, poster: d.movie.poster };
+      if (d.fromTier) state[d.fromTier] = state[d.fromTier].filter(m => m.id !== movie.id);
+      if (d.target.tier) {
+        TIERS.forEach(t => { state[t] = state[t].filter(m => m.id !== movie.id); });
+        const list = state[d.target.tier];
+        list.splice(index < 0 ? list.length : index, 0, movie);
+      }
+      save();
+    }
+    render();
+  }
+
+  load();
+  render();
+</script>
+</body>
+</html>
