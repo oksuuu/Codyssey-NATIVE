@@ -218,7 +218,7 @@
 
   <main>
     <div class="board" id="board"></div>
-    <p class="hint">포스터를 길게 눌러 원하는 티어로 끌어다 놓으세요. 티어에서 빼려면 아래 검색 영역으로 끌어오면 돼요.</p>
+    <p class="hint">포스터를 길게 눌러 원하는 티어로 끌어다 놓으세요. 티어에서 빼려면 아래 검색 영역으로 끌어오거나 포스터를 한 번 눌러 주세요.</p>
   </main>
 
   <section class="panel" id="panel">
@@ -252,6 +252,7 @@
   let resultsMsg = "영화 제목을 검색해 보세요.";
   let storageOK = true;
   let searchSeq = 0;
+  let lastDragEnd = 0;  // 드래그가 끝난 시각 (드래그 직후의 클릭은 삭제로 보지 않음)
 
   /* ---------- 저장 ---------- */
   function setStatus(text, warn) {
@@ -328,8 +329,21 @@
     } else {
       attachDrag(card, movie, fromTier);
     }
+    if (fromTier) {
+      card.addEventListener("click", () => {
+        if (drag || Date.now() - lastDragEnd < 400) return;
+        removeFromTier(movie.id, movie.title, fromTier);
+      });
+    }
     card.addEventListener("contextmenu", e => e.preventDefault());
     return card;
+  }
+
+  function removeFromTier(id, title, tier) {
+    state[tier] = state[tier].filter(m => m.id !== id);
+    save();
+    render();
+    setStatus("‘" + title + "’를 티어에서 뺐어요");
   }
 
   function renderBoard() {
@@ -536,6 +550,7 @@
     cancelAnimationFrame(rafId);
     const d = drag;
     drag = null;
+    lastDragEnd = Date.now();
 
     let index = -1;
     if (!cancelled && d.target && d.target.tier && placeholder.parentNode) {
