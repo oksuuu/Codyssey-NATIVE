@@ -1,6 +1,5 @@
-// Cloudflare Worker: TMDB 검색을 대신 호출해서 API 키를 숨깁니다.
-// TMDB_KEY 는 Cloudflare 대시보드의 Secret 으로만 설정합니다 (GitHub에 적지 않음).
-const ALLOWED = ["https://oksuuu.github.io"]; // 내 GitHub Pages 주소
+
+const ALLOWED = ["https://oksuuu.github.io"];
 
 export default {
   async fetch(req, env) {
@@ -10,16 +9,41 @@ export default {
       "Vary": "Origin",
       "Content-Type": "application/json",
     };
-    const q = new URL(req.url).searchParams.get("q");
-    if (!q) return new Response('{"results":[]}', { headers: cors });
+    const url = new URL(req.url);
+    const q = url.searchParams.get("q");
+    const rec = url.searchParams.get("rec");
 
     const key = env.TMDB_KEY || "";
-    const params = new URLSearchParams({ query: q, language: "ko-KR", include_adult: "false" });
     const init = {};
+    const auth = new URLSearchParams({ language: "ko-KR", include_adult: "false" });
     if (key.length > 60) init.headers = { Authorization: "Bearer " + key, accept: "application/json" };
-    else params.set("api_key", key);
+    else auth.set("api_key", key);
 
-    const r = await fetch("https://api.themoviedb.org/3/search/movie?" + params, init);
+    const tmdb = (path, extra = {}) => {
+      const p = new URLSearchParams(auth);
+      for (const [k, v] of Object.entries(extra)) p.set(k, v);
+      return fetch("https://api.themoviedb.org/3" + path + "?" + p, init);
+    };
+
+    // 추천: ?rec=영화ID
+    if (rec) {
+      if (!/^\d+$/.test(rec)) return new Response('{"results":[]}', { status: 400, headers: cors });
+      let r = await tmdb("/movie/" + rec + "/recommendations");
+      if (!r.ok) return new Response(r.body, { status: r.status, headers: cors });
+      let data = await r.json();
+      if (!(data.results || []).some(m => m.poster_path)) {
+        const r2 = await tmdb("/movie/" + rec + "/similar");
+        if (r2.ok) data = await r2.json();
+      }
+      const results = (data.results || []).filter(m => m.poster_path).slice(0, 20);
+      return new Response(JSON.stringify({ results }), {
+        headers: { ...cors, "Cache-Control": "public, max-age=3600" },
+      });
+    }
+
+    // 검색: ?q=제목
+    if (!q) return new Response('{"results":[]}', { headers: cors });
+    const r = await tmdb("/search/movie", { query: q });
     return new Response(r.body, { status: r.status, headers: cors });
   },
 };
